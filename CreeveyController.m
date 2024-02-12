@@ -688,6 +688,12 @@ NSMutableAttributedString* Fileinfo2EXIFString(NSString *origPath, DYImageCache 
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification {
+	if (@available(macOS 10.14, *)) {
+		// Enforce dark mode
+		NSAppearance *darkAppearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
+		[NSApp setAppearance:darkAppearance];
+	}
+
 	NSUserDefaults *u = NSUserDefaults.standardUserDefaults;
 	[self showExifThumbnail:[u boolForKey:@"exifThumbnailShow"]
 			   shrinkWindow:NO];
