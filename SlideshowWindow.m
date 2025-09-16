@@ -99,7 +99,7 @@ static BOOL UsingMagicMouse(NSEvent *e) {
 		_upcomingQueue = [[NSOperationQueue alloc] init];
 		_fileWatcher = [[DYFileWatcher alloc] initWithDelegate:self];
 		
-			self.backgroundColor = NSColor.blackColor;
+		self.backgroundColor = NSColor.blackColor;
 		self.opaque = YES;
 		_fullscreenMode = YES; // set this to prevent autosaving the frame from the nib
 		self.hasShadow = NO;
@@ -108,7 +108,7 @@ static BOOL UsingMagicMouse(NSEvent *e) {
 		self.collectionBehavior = NSWindowCollectionBehaviorParticipatesInCycle|NSWindowCollectionBehaviorFullScreenNone|NSWindowCollectionBehaviorMoveToActiveSpace;
 		// *** Unfortunately the menubar doesn't seem to show up on the second screen... Eventually we'll want to switch to use NSView's enterFullScreenMode:withOptions:
 		currentIndex = NSNotFound;
-	  }
+	}
     return self;
 }
 
