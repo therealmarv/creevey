@@ -21,6 +21,10 @@ static BOOL UsingMagicMouse(NSEvent *e) {
 
 @interface SlideshowWindow () <DYFileWatcherDelegate>
 @property (nonatomic, copy) NSComparator comparator;
+@property (nonatomic, strong) NSLayoutConstraint *imgL;
+@property (nonatomic, strong) NSLayoutConstraint *imgR;
+@property (nonatomic, strong) NSLayoutConstraint *imgT;
+@property (nonatomic, strong) NSLayoutConstraint *imgB;
 
 - (void)jump:(NSInteger)n;
 - (void)jumpTo:(NSUInteger)n;
@@ -95,34 +99,47 @@ static BOOL UsingMagicMouse(NSEvent *e) {
 		_upcomingQueue = [[NSOperationQueue alloc] init];
 		_fileWatcher = [[DYFileWatcher alloc] initWithDelegate:self];
 		
- 		self.backgroundColor = [NSColor clearColor];
- 		self.opaque = NO;
+			self.backgroundColor = NSColor.blackColor;
+		self.opaque = YES;
+		_fullscreenMode = YES; // set this to prevent autosaving the frame from the nib
 		self.hasShadow = NO;
 		self.titlebarAppearsTransparent = YES;
 		self.titleVisibility = NSWindowTitleHidden;
-		_fullscreenMode = YES; // set this to prevent autosaving the frame from the nib
 		self.collectionBehavior = NSWindowCollectionBehaviorParticipatesInCycle|NSWindowCollectionBehaviorFullScreenNone|NSWindowCollectionBehaviorMoveToActiveSpace;
 		// *** Unfortunately the menubar doesn't seem to show up on the second screen... Eventually we'll want to switch to use NSView's enterFullScreenMode:withOptions:
 		currentIndex = NSNotFound;
-   }
+	  }
     return self;
 }
 
 - (void)awakeFromNib {
 	[super awakeFromNib];
-	self.contentView.wantsLayer = YES;
-	self.contentView.layer.backgroundColor = NSColor.blackColor.CGColor;
 
 	imgView = [[DYImageView alloc] initWithFrame:NSZeroRect];
 	[self.contentView addSubview:imgView];
-	imgView.translatesAutoresizingMaskIntoConstraints = NO;
-    NSLayoutGuide *clg = self.contentLayoutGuide;
-	   [NSLayoutConstraint activateConstraints:@[
-	       [imgView.leadingAnchor constraintEqualToAnchor:clg.leadingAnchor],
-	       [imgView.trailingAnchor constraintEqualToAnchor:clg.trailingAnchor],
-	       [imgView.topAnchor constraintEqualToAnchor:clg.topAnchor],
-	       [imgView.bottomAnchor constraintEqualToAnchor:clg.bottomAnchor],
-	   ]];
+
+	if (_fullscreenMode) {
+		// Fullscreen: constraint-driven
+		self.contentView.wantsLayer = YES;
+		self.contentView.layer.backgroundColor = NSColor.blackColor.CGColor;
+
+		imgView.translatesAutoresizingMaskIntoConstraints = NO;
+		NSLayoutGuide *clg = self.contentLayoutGuide;
+
+		self.imgL = [imgView.leadingAnchor constraintEqualToAnchor:clg.leadingAnchor];
+		self.imgR = [imgView.trailingAnchor constraintEqualToAnchor:clg.trailingAnchor];
+		self.imgT = [imgView.topAnchor constraintEqualToAnchor:clg.topAnchor];
+		self.imgB = [imgView.bottomAnchor constraintEqualToAnchor:clg.bottomAnchor];
+		[NSLayoutConstraint activateConstraints:@[self.imgL, self.imgR, self.imgT, self.imgB]];
+		// Notch avoidance (fullscreen) via constraints
+		[self applyNotchTopInsetForScreen:(self.visible ? self.screen : NSScreen.mainScreen)];
+	} else {
+		// Windowed: autoresizing-driven
+		self.contentView.wantsLayer = NO; // window background supplies black
+		imgView.translatesAutoresizingMaskIntoConstraints = YES;
+		imgView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+		imgView.frame = self.contentView.bounds; // initial size only
+	}
 	
 	infoFld = [[NSTextField alloc] initWithFrame:NSMakeRect(0,0,360,20)];
 	[imgView addSubview:infoFld];
@@ -171,27 +188,94 @@ static BOOL UsingMagicMouse(NSEvent *e) {
 	}
 }
 
+/*
+ Developer note: Fullscreen vs windowed layout (macOS 26 grey-border fix)
+
+ - Fullscreen mode:
+   - Use Auto Layout constraints pinned to contentLayoutGuide on all edges.
+   - Make contentView layer-backed and paint black; window is opaque and shadowless.
+   - This avoids translucent composition that produced thin grey borders on macOS 26.
+   - Notch avoidance is applied via applyNotchTopInsetForScreen(screen), which offsets
+     the top constraint by safeAreaInsets.top when not ignored.
+
+ - Windowed mode:
+   - Disable constraints for imgView and rely on springs/struts (autoresizingMask).
+   - Keep contentView non-layer-backed; the window background provides black.
+   - Do not mix constraints and autoresizing; mixing caused subtle frame churn
+     and grey artifacts on macOS 26.
+
+ If you refactor this, keep the two systems mutually exclusive or move both modes
+ to constraints consistently. Always test fullscreen on notched displays to ensure
+ no grey edge reappears.
+*/
 - (void)setFullscreenMode:(BOOL)b {
     _fullscreenMode = b;
+
     if (b) {
+        // Fullscreen window config
         self.styleMask = NSWindowStyleMaskBorderless;
-        self.backgroundColor = NSColor.blackColor;
-        self.opaque = YES;
+        self.backgroundColor = NSColor.blackColor;   // solid canvas at the window level
+        self.opaque = YES;                           // avoid translucent composition
         self.hasShadow = NO;
         self.titlebarAppearsTransparent = YES;
         self.titleVisibility = NSWindowTitleHidden;
+
+        // Layout system: constraints ON
+        self.contentView.wantsLayer = YES;
+        self.contentView.layer.backgroundColor = NSColor.blackColor.CGColor;
+
+        imgView.translatesAutoresizingMaskIntoConstraints = NO;
+        if (!self.imgL) {
+            NSLayoutGuide *clg = self.contentLayoutGuide;
+            self.imgL = [imgView.leadingAnchor constraintEqualToAnchor:clg.leadingAnchor];
+            self.imgR = [imgView.trailingAnchor constraintEqualToAnchor:clg.trailingAnchor];
+            self.imgT = [imgView.topAnchor constraintEqualToAnchor:clg.topAnchor];
+            self.imgB = [imgView.bottomAnchor constraintEqualToAnchor:clg.bottomAnchor];
+        }
+        [NSLayoutConstraint activateConstraints:@[self.imgL, self.imgR, self.imgT, self.imgB]];
+        // Notch avoidance (fullscreen) via constraints
+        [self applyNotchTopInsetForScreen:(self.visible ? self.screen : NSScreen.mainScreen)];
+        imgView.autoresizingMask = NSViewNotSizable;
     } else {
+        // Windowed (titled) window config
         self.styleMask = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable;
-        self.backgroundColor = NSColor.blackColor;
-        self.opaque = YES;
+        self.backgroundColor = NSColor.blackColor;   // black canvas from window
+        self.opaque = YES;                           // prevent Tahoe’s translucent treatment
         self.hasShadow = YES;
         self.titlebarAppearsTransparent = NO;
         self.titleVisibility = NSWindowTitleVisible;
+
+        // Layout system: constraints OFF, autoresizing ON
+        if (self.imgL) {
+            [NSLayoutConstraint deactivateConstraints:@[self.imgL, self.imgR, self.imgT, self.imgB]];
+            self.imgL = self.imgR = self.imgT = self.imgB = nil;
+        }
+        self.contentView.wantsLayer = NO;
+        imgView.translatesAutoresizingMaskIntoConstraints = YES;
+        imgView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+        imgView.frame = self.contentView.bounds; // reset initial size; autoresizing manages thereafter
     }
+
     self.collectionBehavior = NSWindowCollectionBehaviorParticipatesInCycle |
                               NSWindowCollectionBehaviorFullScreenNone |
                               NSWindowCollectionBehaviorMoveToActiveSpace;
+
+    [self.contentView layoutSubtreeIfNeeded]; // apply layout immediately
     if (self.visible) [self configureScreen];
+}
+
+#pragma mark Notch avoidance
+// Centralized notch handling: offset top constraint by screen.safeAreaInsets.top when “pretendNotchIsntThere” is false.
+// This avoids placing content under the camera housing on notched displays in fullscreen.
+- (void)applyNotchTopInsetForScreen:(NSScreen *)screen {
+	if (!self.imgT) return;
+	CGFloat inset = 0.0;
+	if (@available(macOS 12.0, *)) {
+		if (![NSUserDefaults.standardUserDefaults boolForKey:@"pretendNotchIsntThere"]) {
+			inset = screen.safeAreaInsets.top;
+		}
+	}
+	self.imgT.constant = inset;
 }
 
 - (void)setAutoRotate:(BOOL)b {
@@ -265,32 +349,29 @@ static BOOL UsingMagicMouse(NSEvent *e) {
 	return s.length <= basePath.length ? s : [s substringFromIndex:basePath.length];
 }
 
-- (void)configureScreen // or rather, configure the window *for* the screen
-{
-	NSScreen *myScreen = self.visible ? self.screen : NSScreen.mainScreen;
-	NSRect screenRect = myScreen.frame;
-	if (_fullscreenMode) {
-		NSRect boundingRect = screenRect;
-		if (@available(macOS 12.0, *))
-			if (![NSUserDefaults.standardUserDefaults boolForKey:@"pretendNotchIsntThere"])
-				boundingRect.size.height -= myScreen.safeAreaInsets.top;
-		[self setFrame:screenRect display:NO];
-		// imgView.frame is now handled by Auto Layout
-	} else {
-		NSString *v = [NSUserDefaults.standardUserDefaults objectForKey:@"DYSlideshowWindowFrame"];
-		NSRect r;
-		if (v) {
-			r = NSRectFromString(v);
-		} else {
-			// if no saved frame, put it in the top left of the screen
-			r = screenRect;
-			r.size.width = r.size.width/2;
-			r.size.height = r.size.height/2;
-			r.origin.y = screenRect.size.height;
-		}
-		[self setFrame:r display:NO];
-		// imgView.frame is now handled by Auto Layout
-	}
+- (void)configureScreen {
+    NSScreen *myScreen = self.visible ? self.screen : NSScreen.mainScreen;
+    NSRect screenRect = myScreen.frame;
+
+    if (_fullscreenMode) {
+        [self setFrame:screenRect display:NO];
+        // Notch avoidance (fullscreen) via constraints
+        [self applyNotchTopInsetForScreen:myScreen];
+        // Do NOT set imgView.frame here (constraints own it)
+    } else {
+        NSString *v = [NSUserDefaults.standardUserDefaults objectForKey:@"DYSlideshowWindowFrame"];
+        NSRect r;
+        if (v) {
+            r = NSRectFromString(v);
+        } else {
+            r = screenRect;
+            r.size.width  = r.size.width/2;
+            r.size.height = r.size.height/2;
+            r.origin.y    = screenRect.size.height;
+        }
+        [self setFrame:r display:NO];
+        // Do NOT set imgView.frame here; autoresizing owns it
+    }
 }
 
 - (void)configureBacking {

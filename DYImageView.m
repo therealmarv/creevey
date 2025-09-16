@@ -54,11 +54,11 @@
 }
 
 - (void)drawRect:(NSRect)rect {
-    // Always fill full bounds black first
+    // Always paint a black canvas first
     [NSColor.blackColor set];
     NSRectFill(self.bounds);
 
-    if (!image) return; // Nothing else to draw
+    if (!image) return;
 
 	NSRect srcRect, destinationRect;
 	float zoom = zoomF;
@@ -125,6 +125,7 @@
 		destinationRect = [self convertRect:destinationRect fromView:nil];
 		[NSBezierPath fillRect:destinationRect];
 	}
+    destinationRect = NSIntegralRect(destinationRect);
 	NSGraphicsContext *cg = NSGraphicsContext.currentContext;
 	NSImageInterpolation oldInterp = cg.imageInterpolation;
 	cg.imageInterpolation = zoom >= 4 ? NSImageInterpolationNone : NSImageInterpolationHigh;
@@ -163,7 +164,7 @@
 }
 
 - (BOOL)isOpaque {
-	return YES;
+    return YES; // matches full-bounds black fill
 }
 
 - (void)animateGIF:(NSTimer *)t {
