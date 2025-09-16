@@ -54,8 +54,12 @@
 }
 
 - (void)drawRect:(NSRect)rect {
-	if (!image) return; //don't draw if nil
-	
+    // Always fill full bounds black first
+    [NSColor.blackColor set];
+    NSRectFill(self.bounds);
+
+    if (!image) return; // Nothing else to draw
+
 	NSRect srcRect, destinationRect;
 	float zoom = zoomF;
 	NSRect boundsRect = [self convertRect:self.bounds toView:nil];
@@ -156,6 +160,10 @@
 			gifTimer.tolerance = frameDuration*0.15;
 		}
 	}
+}
+
+- (BOOL)isOpaque {
+	return YES;
 }
 
 - (void)animateGIF:(NSTimer *)t {

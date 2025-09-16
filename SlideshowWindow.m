@@ -95,8 +95,11 @@ static BOOL UsingMagicMouse(NSEvent *e) {
 		_upcomingQueue = [[NSOperationQueue alloc] init];
 		_fileWatcher = [[DYFileWatcher alloc] initWithDelegate:self];
 		
- 		self.backgroundColor = NSColor.blackColor;
-		self.opaque = NO;
+ 		self.backgroundColor = [NSColor clearColor];
+ 		self.opaque = NO;
+		self.hasShadow = NO;
+		self.titlebarAppearsTransparent = YES;
+		self.titleVisibility = NSWindowTitleHidden;
 		_fullscreenMode = YES; // set this to prevent autosaving the frame from the nib
 		self.collectionBehavior = NSWindowCollectionBehaviorParticipatesInCycle|NSWindowCollectionBehaviorFullScreenNone|NSWindowCollectionBehaviorMoveToActiveSpace;
 		// *** Unfortunately the menubar doesn't seem to show up on the second screen... Eventually we'll want to switch to use NSView's enterFullScreenMode:withOptions:
@@ -106,10 +109,20 @@ static BOOL UsingMagicMouse(NSEvent *e) {
 }
 
 - (void)awakeFromNib {
+	[super awakeFromNib];
+	self.contentView.wantsLayer = YES;
+	self.contentView.layer.backgroundColor = NSColor.blackColor.CGColor;
+
 	imgView = [[DYImageView alloc] initWithFrame:NSZeroRect];
 	[self.contentView addSubview:imgView];
-	imgView.frame = self.contentView.frame;
-	imgView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+	imgView.translatesAutoresizingMaskIntoConstraints = NO;
+    NSLayoutGuide *clg = self.contentLayoutGuide;
+	   [NSLayoutConstraint activateConstraints:@[
+	       [imgView.leadingAnchor constraintEqualToAnchor:clg.leadingAnchor],
+	       [imgView.trailingAnchor constraintEqualToAnchor:clg.trailingAnchor],
+	       [imgView.topAnchor constraintEqualToAnchor:clg.topAnchor],
+	       [imgView.bottomAnchor constraintEqualToAnchor:clg.bottomAnchor],
+	   ]];
 	
 	infoFld = [[NSTextField alloc] initWithFrame:NSMakeRect(0,0,360,20)];
 	[imgView addSubview:infoFld];
@@ -159,16 +172,26 @@ static BOOL UsingMagicMouse(NSEvent *e) {
 }
 
 - (void)setFullscreenMode:(BOOL)b {
-	_fullscreenMode = b;
-	if (b) {
-		self.styleMask = NSWindowStyleMaskBorderless;
-		self.collectionBehavior = NSWindowCollectionBehaviorParticipatesInCycle|NSWindowCollectionBehaviorFullScreenNone|NSWindowCollectionBehaviorMoveToActiveSpace;
-	} else {
-		self.styleMask = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable;
-		self.collectionBehavior = NSWindowCollectionBehaviorParticipatesInCycle|NSWindowCollectionBehaviorFullScreenNone|NSWindowCollectionBehaviorMoveToActiveSpace;
-	}
-	if (self.visible)
-		[self configureScreen];
+    _fullscreenMode = b;
+    if (b) {
+        self.styleMask = NSWindowStyleMaskBorderless;
+        self.backgroundColor = NSColor.blackColor;
+        self.opaque = YES;
+        self.hasShadow = NO;
+        self.titlebarAppearsTransparent = YES;
+        self.titleVisibility = NSWindowTitleHidden;
+    } else {
+        self.styleMask = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable;
+        self.backgroundColor = NSColor.blackColor;
+        self.opaque = YES;
+        self.hasShadow = YES;
+        self.titlebarAppearsTransparent = NO;
+        self.titleVisibility = NSWindowTitleVisible;
+    }
+    self.collectionBehavior = NSWindowCollectionBehaviorParticipatesInCycle |
+                              NSWindowCollectionBehaviorFullScreenNone |
+                              NSWindowCollectionBehaviorMoveToActiveSpace;
+    if (self.visible) [self configureScreen];
 }
 
 - (void)setAutoRotate:(BOOL)b {
@@ -252,8 +275,7 @@ static BOOL UsingMagicMouse(NSEvent *e) {
 			if (![NSUserDefaults.standardUserDefaults boolForKey:@"pretendNotchIsntThere"])
 				boundingRect.size.height -= myScreen.safeAreaInsets.top;
 		[self setFrame:screenRect display:NO];
-		boundingRect.origin = imgView.frame.origin;
-		imgView.frame = boundingRect;
+		// imgView.frame is now handled by Auto Layout
 	} else {
 		NSString *v = [NSUserDefaults.standardUserDefaults objectForKey:@"DYSlideshowWindowFrame"];
 		NSRect r;
@@ -267,7 +289,7 @@ static BOOL UsingMagicMouse(NSEvent *e) {
 			r.origin.y = screenRect.size.height;
 		}
 		[self setFrame:r display:NO];
-		imgView.frame = self.contentLayoutRect;
+		// imgView.frame is now handled by Auto Layout
 	}
 }
 
