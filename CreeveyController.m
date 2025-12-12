@@ -91,6 +91,7 @@ NSMutableAttributedString* Fileinfo2EXIFString(NSString *origPath, DYImageCache 
 @property (nonatomic) BOOL appDidFinishLaunching;
 @property (nonatomic) BOOL filesWereOpenedAtLaunch;
 @property (nonatomic) BOOL windowsWereRestoredAtLaunch;
+@property (nonatomic, copy) NSString *dirBrowserContextPath;
 @end
 
 @implementation CreeveyController
@@ -345,6 +346,13 @@ NSMutableAttributedString* Fileinfo2EXIFString(NSString *origPath, DYImageCache 
 	}
 }
 
+- (IBAction)openDirectoryInFinderFromBrowser:(id)sender {
+	NSString *path = self.dirBrowserContextPath;
+	if (path.length == 0) path = frontWindow.path;
+	if (path.length)
+		[NSWorkspace.sharedWorkspace openFile:path];
+	self.dirBrowserContextPath = nil;
+}
 
 - (IBAction)setDesktopPicture:(id)sender {
 	NSString *s = slidesWindow.isMainWindow
